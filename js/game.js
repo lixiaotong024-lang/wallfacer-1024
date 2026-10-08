@@ -451,7 +451,7 @@
     const R = S.result;
     const m = await mount(`<div class="center dice">
       ${SHOW_MASCOT ? '<div class="hero"><img src="img/00_hero.svg" alt=""></div>' : ''}
-      <p id="dq"></p><p class="sub">小钢炮替你掷一次骰子，结果会记下来。</p>
+      <p id="dq"></p><p class="sub">${SHOW_MASCOT ? '小钢炮替你' : '那就'}掷一次骰子，结果会记下来。</p>
       <div class="die-wrap"><div class="die" id="die" style="transform:rotateX(-22deg) rotateY(-32deg)">${[1, 2, 3, 4, 5, 6].map(n => `<div class="f f${n}"></div>`).join('')}</div></div>
       <div class="die-res" id="dres"></div>
       <button class="btn" id="roll" style="max-width:320px;margin:14px auto 0">🎲 掷！</button>
