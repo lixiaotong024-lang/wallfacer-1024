@@ -101,7 +101,8 @@ const FX = (() => {
 
 const SFX = (() => {
   let ac = null;
-  let muted = localStorage.getItem('wf_muted') === '1';
+  let muted = false;
+  try { muted = localStorage.getItem('wf_muted') === '1'; } catch (e) { /* 无痕模式等 */ }
   document.body.classList.toggle('muted', muted);
 
   function wake() {
@@ -150,7 +151,7 @@ const SFX = (() => {
     get muted() { return muted; },
     toggle() {
       muted = !muted;
-      localStorage.setItem('wf_muted', muted ? '1' : '0');
+      try { localStorage.setItem('wf_muted', muted ? '1' : '0'); } catch (e) { /* 无痕模式等 */ }
       document.body.classList.toggle('muted', muted);
       if (!muted) api.tap();
     },

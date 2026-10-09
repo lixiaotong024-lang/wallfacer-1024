@@ -37,7 +37,7 @@
   }
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* 无痕模式等 */ } };
   if (/[?&]reset\b/.test(location.search)) {
-    localStorage.removeItem(KEY);
+    try { localStorage.removeItem(KEY); } catch (e) { /* 无痕模式等 */ }
     history.replaceState(null, '', location.pathname);
   }
   let S = load();
@@ -172,7 +172,7 @@
         <div class="field"><label for="nm">花名 / 昵称</label><input id="nm" maxlength="12" placeholder="会印在你的卡上" enterkeyhint="go"></div>
         <button class="btn" id="start" disabled>启动面壁计划 <span class="arr">→</span></button>
       </form>
-      <div class="meta-line">12 道题 · 约 3 分钟 · <span class="mono">4¹² = 16,777,216</span> 种走法</div>
+      <div class="meta-line">12 道题 · 约 5 分钟 · <span class="mono">4¹² = 16,777,216</span> 种走法</div>
     </div>`, { hudM: 'mini', bare: true });
     if (!m) return;
     const nm = $('#nm'), btn = $('#start');
@@ -202,6 +202,7 @@
     const box = $('.opts', root);
     const pick = b => {
       if (box.classList.contains('locked')) return;
+      if (+getComputedStyle(b).opacity < 0.6) return; // 选项还没浮出来，防手快误点
       box.classList.add('locked');
       b.classList.add('picked');
       SFX.pick();
@@ -258,7 +259,7 @@
       el.innerHTML = qHead(i, esc(q.stage), verTag(q.v)) + qBody(i);
       setVersion(q.v);
       bindOpts(el, i, t);
-      if (!await wait(t, 1000)) return;
+      if (!await wait(t, 1000) || $('.opts', el).classList.contains('locked')) return;
       dialog('<div class="em">🔁</div><p>你刚为一道题重试了 2 次。<br>纽扣也是这么过来的。</p>', [{ t: '接着来' }]);
     };
   }
@@ -279,8 +280,9 @@
     const { el, t } = m;
     setVersion(QUESTIONS[sc.after].v);
     const btn = $('#cont', el), hint = $('.tap-hint', el);
-    let ready = false;
-    const poke = () => { if (ready) { SFX.tap(); adv(t); } else speed = 14; };
+    let ready = false, readyAt = 0;
+    // 连点加速时，最后几下别顺手把过场跳过去：按钮出现后 0.5 秒内的点击不算
+    const poke = () => { if (ready) { if (Date.now() - readyAt > 500) { SFX.tap(); adv(t); } } else speed = 14; };
     el.onclick = poke;
     onKey = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); poke(); } };
     if (!await wait(t, k === 'half' ? 500 : 900)) return;
@@ -290,7 +292,7 @@
       if (has) SFX.line();
       if (!await wait(t, has ? 780 : 260)) return;
     }
-    ready = true;
+    ready = true; readyAt = Date.now();
     btn.classList.add('in');
     hint.style.visibility = 'hidden';
   }
