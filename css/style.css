@@ -278,26 +278,22 @@ body.muted .icon-btn .mute { display: inline; }
 .dots12 { display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; }
 .dot12 { aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; font: 700 9px var(--mono); color: rgba(0, 0, 0, .55); transform: scale(0); transition: transform .4s cubic-bezier(.3, 1.6, .5, 1); }
 .rv.in .dot12 { transform: scale(1); }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: 13px; color: var(--dim); }
-.legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--c); margin-right: 6px; box-shadow: 0 0 8px var(--c); }
-.kw6 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.kw { padding: 10px 12px; border-radius: 12px; background: var(--glass); border: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; font-weight: 700; }
-.kw .pair { display: flex; gap: 4px; }
-.kw .pair i { width: 10px; height: 10px; border-radius: 50%; background: var(--c); box-shadow: 0 0 6px var(--c); }
-.kw2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.kw2 div { text-align: center; padding: 16px 8px; border-radius: 14px; font-size: 20px; font-weight: 800; letter-spacing: .1em; background: rgba(143, 124, 255, .12); border: 1px solid rgba(143, 124, 255, .45); box-shadow: 0 0 24px rgba(143, 124, 255, .18) inset; }
-.kw2 small { display: block; font-size: 12px; font-weight: 500; color: var(--dim); letter-spacing: .04em; margin-top: 4px; }
 .one { font-size: 24px; font-weight: 800; line-height: 1.5; }
-.tri { font: 13.5px/1.9 var(--mono); background: rgba(5, 8, 24, .7); border: 1px solid var(--line); border-radius: 16px; padding: 16px 14px; overflow-x: auto; }
-.tri .l { display: flex; justify-content: space-between; gap: 10px; white-space: nowrap; opacity: 0; transition: opacity .3s; }
-.tri .l.in { opacity: 1; }
-.tri .l .v { color: var(--dim); width: 4.5em; }
-.tri .l .eq { color: var(--faint); }
-.tri .l .b { color: var(--led); text-shadow: 0 0 8px rgba(124, 247, 255, .6); letter-spacing: .12em; white-space: pre; }
-.tri .l.gold .b { color: #ffd98a; text-shadow: 0 0 10px rgba(255, 200, 110, .8); }
-.tri .note { font-family: var(--sans); font-size: 13px; color: #c9cdf0; text-align: right; margin: -2px 0 6px; opacity: 0; transition: opacity .5s; }
-.tri .note.in { opacity: 1; }
-.tri .note.gold { color: #ffd98a; }
+.one.tie b { white-space: nowrap; }
+.one.tie span { color: var(--faint); }
+.bars { display: grid; gap: 9px; }
+.bar { display: grid; grid-template-columns: 5.2em 1fr 2.2em; align-items: center; gap: 10px; font-size: 15px; font-weight: 700; color: var(--dim); }
+.bar.top { color: var(--c); }
+.bar .cells { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+.bar .cells i { height: 12px; border-radius: 4px; background: rgba(255, 255, 255, .07); transition: background .3s, box-shadow .3s; }
+.rv.in .bar .cells i.on { background: var(--c); box-shadow: 0 0 8px var(--c); }
+.bar .x { font: 700 15px var(--mono); text-align: right; color: var(--c); }
+.bar .x.zero { color: var(--faint); }
+.sp-name { font-size: clamp(46px, 14vw, 64px); font-weight: 900; letter-spacing: .08em; color: var(--c); text-shadow: 0 0 28px var(--c); margin: 4px 0 6px; }
+.sp-def { font-size: 15px; line-height: 1.8; color: #c9cdf0; margin: 0 0 24px; }
+.redeem { margin: 18px auto 0; max-width: 420px; padding: 12px 16px; border-radius: 14px; border: 1.5px dashed var(--c); background: rgba(255, 255, 255, .04); display: grid; gap: 2px; }
+.redeem b { font-size: 15px; color: var(--c); }
+.redeem span { font-size: 13px; color: var(--dim); }
 .skip { position: fixed; right: max(14px, calc(50vw - 290px)); bottom: calc(var(--bot) + 16px); z-index: 25; font: 12px var(--mono); color: var(--dim); padding: 8px 14px; border-radius: 99px; border: 1px solid var(--line); background: rgba(5, 6, 15, .7); backdrop-filter: blur(6px); }
 
 /* ---------- 掷骰子 ---------- */
@@ -309,7 +305,7 @@ body.muted .icon-btn .mute { display: inline; }
 .die { position: relative; width: 96px; height: 96px; transform-style: preserve-3d; transition: transform 1.8s cubic-bezier(.15, .7, .2, 1); }
 .die .f {
   position: absolute; inset: 0; border-radius: 18px; display: grid; place-items: center;
-  font-size: 22px; font-weight: 800; color: var(--c);
+  font-size: 22px; font-weight: 800; line-height: 1.2; color: var(--c);
   background: linear-gradient(145deg, #1d2150, #0d1030); border: 2px solid var(--c);
   box-shadow: 0 0 18px var(--c) inset, 0 0 12px rgba(0, 0, 0, .6);
   text-shadow: 0 0 10px var(--c);
@@ -348,15 +344,12 @@ body.muted .icon-btn .mute { display: inline; }
 }
 .floor { width: 70%; height: 30px; margin: -8px auto 0; border-radius: 50%; background: radial-gradient(var(--spot, rgba(255, 255, 255, .25)), transparent 70%); filter: blur(6px); opacity: 0; transition: opacity 1s ease 1s; }
 .stage.lit .floor { opacity: 1; }
-.holo { position: absolute; inset: 0; border-radius: 20px; pointer-events: none; mix-blend-mode: overlay; background: linear-gradient(115deg, transparent 20%, rgba(255, 255, 255, .55) 40%, transparent 50%, rgba(255, 255, 255, .35) 60%, transparent 80%); background-size: 300% 100%; animation: holo 3.2s ease-in-out infinite; backface-visibility: hidden; }
-@keyframes holo { 0% { background-position: 120% 0; } 100% { background-position: -120% 0; } }
 .r-tip { font-size: 13px; color: var(--dim); margin: 16px 0 14px; }
 .r-tip b { color: var(--ink); }
 .actions { display: grid; gap: 10px; max-width: 420px; margin: 0 auto; }
 .after { opacity: 0; transition: opacity .6s ease; pointer-events: none; }
 .after.in { opacity: 1; pointer-events: auto; }
 .r-title { margin: 18px 0 0; }
-.r-title .rare { display: inline-block; font: 700 11px var(--mono); letter-spacing: .2em; padding: 4px 10px; border-radius: 99px; color: #05060f; background: var(--all); margin-bottom: 8px; }
 .loading-card { padding: 120px 0; color: var(--dim); font: 13px var(--mono); letter-spacing: .2em; }
 
 /* ---------- 弹窗 / 提示 ---------- */
@@ -377,14 +370,12 @@ body.muted .icon-btn .mute { display: inline; }
   .opt { font-size: 16px; padding: 16px 18px; }
   .led { width: 16px; height: 16px; }
   .lights { gap: 8px; }
-  .tri { font-size: 15px; }
 }
 @media (max-width: 360px) {
   .led { width: 12px; height: 12px; }
   .lights { gap: 4px; }
   .q-text { font-size: 17px; }
   .opt { font-size: 15px; }
-  .tri { font-size: 12px; }
   .big-lights { gap: 5px; }
   .big-lights .led, .big-lights .led.new.show { width: 18px; height: 18px; }
 }

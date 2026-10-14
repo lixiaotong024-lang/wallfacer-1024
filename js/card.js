@@ -1,16 +1,10 @@
-// 结果卡：用 Canvas 直接画正反两面，导出成图片（手机可长按保存，电脑可下载）。
+// 面壁精神卡：用 Canvas 直接画正反两面，导出成图片（手机可长按保存，电脑可下载）。
 
 const Card = (() => {
   const SANS = '"PingFang SC","HarmonyOS Sans SC","MiSans","Noto Sans SC","Source Han Sans SC","Microsoft YaHei",sans-serif';
   const MONO = '"SF Mono","JetBrains Mono",Menlo,Consolas,"Roboto Mono",monospace';
   const W = 1080, P = 76;
   const NO_START = '，。、！？：；）》」』”’…%';
-  const imgs = {};
-
-  const loadImg = src => imgs[src] || (imgs[src] = new Promise((ok, bad) => {
-    const im = new Image();
-    im.onload = () => ok(im); im.onerror = bad; im.src = src;
-  }));
   const font = (px, w = 400, fam = SANS) => `${w} ${px}px ${fam}`;
 
   function rr(c, x, y, w, h, r) {
@@ -24,7 +18,12 @@ const Card = (() => {
     const lines = []; let cur = '';
     for (const ch of Array.from(text)) {
       if (c.measureText(cur + ch).width > maxW && cur) {
-        if (NO_START.includes(ch)) { const last = Array.from(cur).pop(); cur = cur.slice(0, -last.length); lines.push(cur); cur = last + ch; }
+        if (NO_START.includes(ch)) {
+          // 标点不能起行：往回借字，直到借到一个非标点（“儿。”” 整体挪下去）
+          const cs = Array.from(cur); let k = cs.length - 1;
+          while (k > 0 && NO_START.includes(cs[k])) k--;
+          lines.push(cs.slice(0, k).join('')); cur = cs.slice(k).join('') + ch;
+        }
         else { lines.push(cur); cur = ch; }
       } else cur += ch;
     }
@@ -56,47 +55,39 @@ const Card = (() => {
     return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
   }
 
+  // 把颜色往白 (k>0) 或黑 (k<0) 推
+  function mix(hex, k) {
+    const n = parseInt(hex.slice(1), 16), t = k > 0 ? 255 : 0, a = Math.abs(k);
+    const ch = v => Math.round(v + (t - v) * a);
+    return `rgb(${ch(n >> 16)},${ch((n >> 8) & 255)},${ch(n & 255)})`;
+  }
+
   function theme(R) {
-    const pc = STYLES[R.p].color;
-    if (R.rare) {
-      const ink = STYLES[R.p].ink;
-      return { rare: true, pc, ink, sub: hexA(ink, 0.7), faint: hexA(ink, 0.42), panel: 'rgba(255,255,255,.28)', line: hexA(ink, 0.18), led: ink, accent: ink };
-    }
-    return { rare: false, pc, ink: '#eef1ff', sub: '#a7acd8', faint: '#5f6597', panel: 'rgba(255,255,255,.045)', line: 'rgba(150,160,255,.18)', led: '#b9f6ff', accent: pc };
+    const sp = SPIRITS[R.top];
+    return { sp, pc: sp.color, ink: '#eef1ff', sub: '#a7acd8', faint: '#5f6597', panel: 'rgba(255,255,255,.045)', line: 'rgba(150,160,255,.18)', led: '#b9f6ff', accent: sp.color };
   }
 
   function background(c, T, H, glowY) {
-    if (T.rare) {
-      c.fillStyle = T.pc; c.fillRect(0, 0, W, H);
-      const s = c.createLinearGradient(0, 0, W, H);
-      s.addColorStop(0, 'rgba(255,255,255,.35)'); s.addColorStop(0.5, 'rgba(255,255,255,0)'); s.addColorStop(1, 'rgba(0,0,0,.12)');
-      c.fillStyle = s; c.fillRect(0, 0, W, H);
-    } else {
-      const g = c.createLinearGradient(0, 0, 0, H);
-      g.addColorStop(0, '#0d1030'); g.addColorStop(0.55, '#0a0b22'); g.addColorStop(1, '#130f36');
-      c.fillStyle = g; c.fillRect(0, 0, W, H);
-    }
+    const g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0d1030'); g.addColorStop(0.55, '#0a0b22'); g.addColorStop(1, '#130f36');
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
     // 网格
-    c.strokeStyle = T.rare ? 'rgba(0,0,0,.05)' : 'rgba(143,124,255,.06)'; c.lineWidth = 1;
+    c.strokeStyle = 'rgba(143,124,255,.06)'; c.lineWidth = 1;
     for (let x = 0; x <= W; x += 54) { c.beginPath(); c.moveTo(x + 0.5, 0); c.lineTo(x + 0.5, H); c.stroke(); }
     for (let y = 0; y <= H; y += 54) { c.beginPath(); c.moveTo(0, y + 0.5); c.lineTo(W, y + 0.5); c.stroke(); }
-    // 主场色光晕
+    // 精神色光晕
     if (glowY != null) {
       const rg = c.createRadialGradient(W / 2, glowY, 0, W / 2, glowY, 520);
-      rg.addColorStop(0, T.rare ? 'rgba(255,255,255,.45)' : hexA(T.pc, 0.32));
-      rg.addColorStop(1, 'rgba(0,0,0,0)');
+      rg.addColorStop(0, hexA(T.pc, 0.32)); rg.addColorStop(1, 'rgba(0,0,0,0)');
       c.fillStyle = rg; c.fillRect(0, 0, W, H);
     }
-    // 边框 + 四角
+    // 边框：6 种精神色 + 四角用本卡的颜色
     const m = 26;
-    if (T.rare) c.strokeStyle = hexA(T.ink, 0.5);
-    else {
-      const sg = c.createLinearGradient(0, 0, W, H);
-      sg.addColorStop(0, '#ff7a3d'); sg.addColorStop(0.36, '#ff4fd8'); sg.addColorStop(0.68, '#7cf7ff'); sg.addColorStop(1, '#c6ff3d');
-      c.strokeStyle = sg;
-    }
+    const sg = c.createLinearGradient(0, 0, W, H);
+    ORDER.forEach((k, i) => sg.addColorStop(i / (ORDER.length - 1), SPIRITS[k].color));
+    c.strokeStyle = sg;
     c.lineWidth = 3; rr(c, m, m, W - 2 * m, H - 2 * m, 40); c.stroke();
-    c.lineWidth = 6; c.lineCap = 'round';
+    c.strokeStyle = T.pc; c.lineWidth = 6; c.lineCap = 'round';
     const k = 54, n = m + 16;
     [[n, n, 1, 1], [W - n, n, -1, 1], [n, H - n, 1, -1], [W - n, H - n, -1, -1]].forEach(([x, y, sx, sy]) => {
       c.beginPath(); c.moveTo(x, y + sy * k); c.lineTo(x, y); c.lineTo(x + sx * k, y); c.stroke();
@@ -107,29 +98,28 @@ const Card = (() => {
   function header(c, T, right) {
     c.fillStyle = T.sub; c.font = font(25, 600, MONO); c.textBaseline = 'alphabetic';
     spaced(c, '2¹⁰ · NEW WALL-FACER', P, 104, 3);
-    c.fillStyle = T.rare ? T.ink : T.led; c.font = font(25, 700, MONO);
+    c.fillStyle = T.led; c.font = font(25, 700, MONO);
     spaced(c, right, W - P, 104, 3, 'right');
   }
 
-  // 发光纽扣：主场色 → 副场色，外圈 10 盏灯 + 顶上一盏金灯（v1024）
-  function emblem(c, T, R, cx, cy) {
+  // 发光纽扣：本卡精神色，外圈 10 盏灯 + 顶上一盏金灯（v1024）
+  function emblem(c, T, cx, cy) {
     const r = 138, orbit = 196;
     c.save();
     c.setLineDash([3, 12]); c.lineWidth = 2;
-    c.strokeStyle = T.rare ? hexA(T.ink, 0.35) : 'rgba(143,124,255,.45)';
+    c.strokeStyle = 'rgba(143,124,255,.45)';
     c.beginPath(); c.arc(cx, cy, orbit, 0, 7); c.stroke();
     c.restore();
     for (let i = 0; i < 11; i++) {
       const a = (-90 + i * (360 / 11)) * Math.PI / 180;
       const x = cx + Math.cos(a) * orbit, y = cy + Math.sin(a) * orbit;
-      if (i === 0) led(c, x, y, 15, T.rare ? T.ink : '#ffc766', true, !T.rare);
-      else led(c, x, y, 9, T.rare ? T.ink : '#b9f6ff', true, !T.rare);
+      if (i === 0) led(c, x, y, 15, '#ffc766', true);
+      else led(c, x, y, 9, '#b9f6ff', true);
     }
-    const sc = STYLES[R.s].color;
     c.save();
-    c.shadowColor = T.rare ? 'rgba(0,0,0,.25)' : T.pc; c.shadowBlur = 90;
+    c.shadowColor = T.pc; c.shadowBlur = 90;
     const g = c.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
-    g.addColorStop(0, T.rare ? '#ffffff' : T.pc); g.addColorStop(1, T.rare ? T.pc : sc);
+    g.addColorStop(0, mix(T.pc, 0.45)); g.addColorStop(1, mix(T.pc, -0.3));
     c.fillStyle = g; c.beginPath(); c.arc(cx, cy, r, 0, 7); c.fill();
     c.restore();
     const hl = c.createRadialGradient(cx - r * 0.35, cy - r * 0.4, 0, cx - r * 0.35, cy - r * 0.4, r * 1.1);
@@ -137,79 +127,79 @@ const Card = (() => {
     c.fillStyle = hl; c.beginPath(); c.arc(cx, cy, r, 0, 7); c.fill();
     c.strokeStyle = 'rgba(0,0,0,.16)'; c.lineWidth = 7;
     c.beginPath(); c.arc(cx, cy, r * 0.76, 0, 7); c.stroke();
-    const ink = T.rare ? T.ink : STYLES[R.p].ink;
-    c.fillStyle = hexA(ink, 0.55);
+    c.fillStyle = hexA(T.sp.ink, 0.55);
     for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
       c.beginPath(); c.arc(cx + dx * r * 0.24, cy + dy * r * 0.24, r * 0.11, 0, 7); c.fill();
     }
     return orbit + 15;
   }
 
-  function lightsRow(c, T, x, y, r, gap) {
-    for (let i = 0; i < 10; i++) led(c, x + i * (2 * r + gap) + r, y, r, T.rare ? T.ink : '#b9f6ff', true, !T.rare);
+  function lightsRow(c, x, y, r, gap) {
+    for (let i = 0; i < 10; i++) led(c, x + i * (2 * r + gap) + r, y, r, '#b9f6ff', true);
     return x + 10 * (2 * r + gap);
+  }
+
+  function panelLabel(c, T, en, zh, x, y) {
+    c.fillStyle = T.sub; c.font = font(24, 700, MONO);
+    const w = spaced(c, en, x, y, 4);
+    c.font = font(25, 500); c.fillText(`· ${zh}`, x + w + 14, y);
+  }
+
+  // 6 种精神的六边形雷达
+  function radar(c, T, R, cx, cy, rad) {
+    const max = Math.max(4, ...ORDER.map(k => R.counts[k]));
+    const pt = (i, f) => { const a = (-90 + i * 60) * Math.PI / 180; return [cx + Math.cos(a) * rad * f, cy + Math.sin(a) * rad * f]; };
+    c.strokeStyle = 'rgba(255,255,255,.12)'; c.lineWidth = 2;
+    for (const f of [0.25, 0.5, 0.75, 1]) {
+      c.beginPath(); ORDER.forEach((_, i) => c[i ? 'lineTo' : 'moveTo'](...pt(i, f))); c.closePath(); c.stroke();
+    }
+    ORDER.forEach((_, i) => { c.beginPath(); c.moveTo(cx, cy); c.lineTo(...pt(i, 1)); c.stroke(); });
+    const ps = ORDER.map((k, i) => pt(i, Math.max(0.06, R.counts[k] / max)));
+    c.beginPath(); ps.forEach((p, i) => c[i ? 'lineTo' : 'moveTo'](...p)); c.closePath();
+    c.fillStyle = hexA(T.pc, 0.3); c.fill();
+    c.strokeStyle = T.pc; c.lineWidth = 4; c.stroke();
+    ORDER.forEach((k, i) => led(c, ...ps[i], k === R.top ? 11 : 7, SPIRITS[k].color, R.counts[k] > 0));
+    c.textAlign = 'center';
+    ORDER.forEach((k, i) => {
+      const [x, y] = pt(i, 1);
+      const lx = x + (x - cx) / rad * 46, ly = y + (y - cy) / rad * 52 + 9;
+      c.fillStyle = k === R.top ? SPIRITS[k].color : T.sub; c.font = font(24, k === R.top ? 800 : 600);
+      c.fillText(SPIRITS[k].name, lx, ly);
+    });
+    c.textAlign = 'left';
   }
 
   // ---------- 正面 ----------
   async function front(R, name) {
-    const T = theme(R);
-    const id = IDENTITIES[R.p + R.s];
-    const L = document.createElement('canvas'); L.width = W; L.height = 3400;
+    const T = theme(R), sp = T.sp;
+    const L = document.createElement('canvas'); L.width = W; L.height = 3600;
     const c = L.getContext('2d');
     c.textBaseline = 'alphabetic';
 
-    let y = 118;
-    if (T.rare) {
-      c.font = font(24, 800, MONO);
-      const label = `RARE · ${STYLES[R.p].full}单站满格`;
-      const w = c.measureText(label).width + 44;
-      c.fillStyle = T.ink; rr(c, (W - w) / 2, y + 12, w, 46, 23); c.fill();
-      c.fillStyle = T.pc; c.textAlign = 'center'; c.fillText(label, W / 2, y + 44); c.textAlign = 'left';
-    }
-    const iy = y + (T.rare ? 34 : 6);
-    let glowY;
-    if (SHOW_MASCOT) {
-      const S = 600;
-      c.drawImage(await loadImg(`img/${id.img}.svg`), (W - S) / 2, iy, S, S);
-      glowY = iy + S * 0.45;
-      y = iy + S + 70;
-    } else {
-      const cy = iy + 250;
-      const half = emblem(c, T, R, W / 2, cy);
-      glowY = cy;
-      y = cy + half + 104;
-    }
+    const cy0 = 118 + 6 + 250;
+    const half = emblem(c, T, W / 2, cy0);
+    const glowY = cy0;
+    let y = cy0 + half + 128;
 
     c.textAlign = 'center';
-    c.fillStyle = T.ink; c.font = font(94, 800);
-    c.fillText(id.name, W / 2, y);
-    y += 52;
+    c.fillStyle = T.ink; c.font = font(112, 900);
+    spaced(c, sp.name, W / 2, y, 14, 'center');
+    y += 58;
     c.fillStyle = T.accent; c.font = font(27, 700, MONO);
-    spaced(c, id.en.toUpperCase(), W / 2, y, 5, 'center');
-    y += 66;
-    c.fillStyle = T.rare ? T.ink : '#d9dcff'; c.font = font(35, 500);
-    for (const ln of wrap(c, id.line, W - 2 * P - 60)) { c.fillText(ln, W / 2, y); y += 54; }
+    spaced(c, sp.en.toUpperCase(), W / 2, y, 5, 'center');
+    y += 78;
+    c.fillStyle = '#d9dcff'; c.font = font(38, 600);
+    c.fillText(`“${sp.line}”`, W / 2, y);
 
-    if (T.rare) {
-      y += 8;
-      c.font = font(30, 700);
-      const t = `12 道题里，有 ${R.counts[R.p]} 道你都从${STYLES[R.p].name}出发。`;
-      const w = c.measureText(t).width + 56;
-      c.fillStyle = 'rgba(255,255,255,.4)'; rr(c, (W - w) / 2, y - 40, w, 60, 30); c.fill();
-      c.fillStyle = T.ink; c.fillText(t, W / 2, y);
-      y += 58;
-    }
-
-    // 名字 · 主场 · 副场
-    y += 20;
+    // 名字 · 编号
+    y += 50;
     const pills = [
-      { t: name, f: font(31, 800), fill: T.rare ? 'rgba(255,255,255,.4)' : 'rgba(255,255,255,.1)', ink: T.ink },
-      { t: `主场 · ${STYLES[R.p].full}`, f: font(29, 700), fill: T.rare ? T.ink : STYLES[R.p].color, ink: T.rare ? T.pc : STYLES[R.p].ink },
-      { t: `副场 · ${STYLES[R.s].full}`, f: font(29, 700), stroke: T.rare ? T.ink : STYLES[R.s].color, ink: T.rare ? T.ink : STYLES[R.s].color },
+      { t: name, f: font(31, 800), fill: T.pc, ink: sp.ink },
+      { t: `No. ${R.top.toUpperCase()}-${R.code}`, f: font(28, 700, MONO), stroke: T.pc, ink: T.pc },
     ];
     const ph = 60, pg = 14;
     pills.forEach(p => { c.font = p.f; p.w = c.measureText(p.t).width + 46; });
-    let px = (W - pills.reduce((s, p) => s + p.w, 0) - pg * 2) / 2;
+    let px = (W - pills.reduce((s, p) => s + p.w, 0) - pg) / 2;
     for (const p of pills) {
       rr(c, px, y, p.w, ph, ph / 2);
       if (p.fill) { c.fillStyle = p.fill; c.fill(); }
@@ -217,97 +207,87 @@ const Card = (() => {
       c.fillStyle = p.ink; c.font = p.f; c.fillText(p.t, px + p.w / 2, y + 41);
       px += p.w + pg;
     }
-    y += ph + 52;
+    y += ph + 50;
     c.textAlign = 'left';
 
-    // 面壁精神 · 6 个关键词
-    const rows = [];
-    for (const g of SPIRIT) {
-      rows.push({ k: g.key, lv: 0, ...R.lines[g.key] });
-      for (const ch of g.children) rows.push({ k: ch.key, lv: 1, ...R.lines[ch.key] });
-    }
-    const textX = P + 236, textW = W - P - 34 - textX;
+    // 释义
+    c.font = font(32, 500);
+    const dl = wrap(c, sp.def, W - 2 * P - 72);
+    let ph2 = 98 + dl.length * 50 + 14;
+    c.fillStyle = T.panel; rr(c, P - 10, y, W - 2 * P + 20, ph2, 30); c.fill();
+    c.fillStyle = T.pc; c.fillRect(P - 10, y + 30, 8, ph2 - 60);
+    panelLabel(c, T, 'WALL-FACER SPIRIT', '面壁精神', P + 26, y + 56);
+    c.fillStyle = T.ink; c.font = font(32, 500);
+    dl.forEach((ln, j) => c.fillText(ln, P + 26, y + 112 + j * 50));
+    y += ph2 + 30;
+
+    // 你亮起它的时刻
+    const rows = R.answers.map((oi, qi) => ({ q: QUESTIONS[qi], o: QUESTIONS[qi].o[oi] })).filter(r => r.o.s === R.top);
+    const textX = P + 216, textW = W - P - 30 - textX;
     c.font = font(31, 500);
-    rows.forEach(r => { r.wl = wrap(c, r.c, textW); r.h = 34 + r.wl.length * 44; });
-    const panelH = 92 + rows.reduce((s, r) => s + r.h, 0) + 18;
-    c.fillStyle = T.panel; rr(c, P - 10, y, W - 2 * P + 20, panelH, 30); c.fill();
-    c.fillStyle = T.sub; c.font = font(24, 700, MONO);
-    spaced(c, 'SPIRIT LOG', P + 26, y + 56, 4);
-    c.font = font(25, 500); c.fillText('· 一路上你做过的事', P + 210, y + 56);
+    rows.forEach(r => { r.wl = wrap(c, r.o.c, textW); r.h = 30 + r.wl.length * 44; });
+    ph2 = 92 + rows.reduce((s, r) => s + r.h, 0) + 22;
+    c.fillStyle = T.panel; rr(c, P - 10, y, W - 2 * P + 20, ph2, 30); c.fill();
+    panelLabel(c, T, 'SPIRIT LOG', `你亮起它的 ${rows.length} 个时刻`, P + 26, y + 56);
     let ry = y + 92;
     rows.forEach((r, i) => {
-      const base = ry + 44;
-      if (r.lv === 0) {
-        if (i) { c.strokeStyle = T.line; c.lineWidth = 2; c.beginPath(); c.moveTo(P + 26, ry + 4); c.lineTo(W - P - 26, ry + 4); c.stroke(); }
-        c.fillStyle = T.accent; c.fillRect(P + 26, base - 25, 10, 26);
-        c.fillStyle = T.ink; c.font = font(33, 800); c.fillText(r.k, P + 48, base);
-      } else {
-        c.strokeStyle = T.faint; c.lineWidth = 2.5;
-        c.beginPath(); c.moveTo(P + 31, base - 44); c.lineTo(P + 31, base - 12); c.lineTo(P + 52, base - 12); c.stroke();
-        c.fillStyle = T.sub; c.font = font(30, 700); c.fillText(r.k, P + 64, base);
-      }
-      led(c, textX - 22, base - 11, 8, STYLES[r.s].color, true, false);
-      if (T.rare) { c.strokeStyle = hexA(T.ink, 0.6); c.lineWidth = 2; c.beginPath(); c.arc(textX - 22, base - 11, 8, 0, 7); c.stroke(); }
+      const base = ry + 40;
+      if (i) { c.strokeStyle = T.line; c.lineWidth = 2; c.beginPath(); c.moveTo(P + 26, ry + 2); c.lineTo(W - P - 26, ry + 2); c.stroke(); }
+      led(c, P + 36, base - 11, 8, T.pc, true, false);
+      c.fillStyle = T.sub; c.font = font(25, 700, MONO);
+      c.fillText(r.q.v == null ? 'v—' : 'v' + r.q.v, P + 60, base - 1);
       c.fillStyle = T.ink; c.font = font(31, 500);
       r.wl.forEach((ln, j) => c.fillText(ln, textX, base + j * 44));
       ry += r.h;
     });
-    y += panelH + 54;
+    y += ph2 + 64;
 
-    // 我的学习圈
-    const cx = P + 160, cy = y + 170, RR = 120;
-    c.fillStyle = T.sub; c.font = font(24, 700, MONO); spaced(c, 'LEARNING LOOP', P + 6, y + 6, 4);
-    c.font = font(25, 500); c.fillText('· 我的学习圈', P + 248, y + 6);
-    RING.forEach((s, qi) => {
-      const col = STYLES[s].color, n = R.counts[s];
-      for (let j = 0; j < 12; j++) {
-        const a = (-90 + qi * 90 + 6 + j * (78 / 11)) * Math.PI / 180;
-        const x = cx + Math.cos(a) * RR, yy = cy + Math.sin(a) * RR;
-        if (j < n) {
-          led(c, x, yy, 8.5, col, true, !T.rare);
-          if (T.rare) { c.strokeStyle = hexA(T.ink, 0.55); c.lineWidth = 2; c.beginPath(); c.arc(x, yy, 8.5, 0, 7); c.stroke(); }
-        } else {
-          c.strokeStyle = T.rare ? hexA(T.ink, 0.25) : 'rgba(255,255,255,.16)'; c.lineWidth = 2;
-          c.beginPath(); c.arc(x, yy, 6.5, 0, 7); c.stroke();
-        }
-      }
-      const ma = (-45 + qi * 90) * Math.PI / 180;
-      c.fillStyle = T.rare ? T.ink : col; c.font = font(25, 800); c.textAlign = 'center';
-      c.fillText(STYLES[s].name, cx + Math.cos(ma) * (RR + 46), cy + Math.sin(ma) * (RR + 46) + 9);
+    // 6 种精神
+    panelLabel(c, T, 'SIX SPIRITS', '12 个选择亮起了什么', P + 6, y);
+    const rcx = P + 206, rcy = y + 236;
+    radar(c, T, R, rcx, rcy, 138);
+    const lx = P + 470;
+    ORDER.forEach((k, i) => {
+      const ly = y + 92 + i * 60;
+      const on = k === R.top;
+      led(c, lx + 9, ly - 10, 9, SPIRITS[k].color, R.counts[k] > 0);
+      c.fillStyle = on ? T.ink : T.sub; c.font = font(31, on ? 800 : 600); c.fillText(SPIRITS[k].name, lx + 34, ly);
+      c.fillStyle = R.counts[k] ? SPIRITS[k].color : T.faint; c.font = font(32, 800, MONO);
+      c.textAlign = 'right'; c.fillText(`×${R.counts[k]}`, W - P - 10, ly); c.textAlign = 'left';
     });
-    c.fillStyle = T.sub; c.font = font(22, 600); c.fillText('主场', cx, cy - 10);
-    c.fillStyle = T.rare ? T.ink : STYLES[R.p].color; c.font = font(44, 800); c.fillText(STYLES[R.p].name, cx, cy + 38);
-    c.textAlign = 'left';
+    y += 470;
 
-    const lx = P + 390;
-    RING.forEach((s, i) => {
-      const ly = y + 74 + i * 76;
-      led(c, lx + 9, ly - 10, 9, STYLES[s].color, R.counts[s] > 0, !T.rare);
-      if (T.rare) { c.strokeStyle = hexA(T.ink, 0.6); c.lineWidth = 2; c.beginPath(); c.arc(lx + 9, ly - 10, 9, 0, 7); c.stroke(); }
-      c.fillStyle = T.ink; c.font = font(31, 800); c.fillText(STYLES[s].full, lx + 34, ly);
-      c.fillStyle = T.rare ? T.ink : STYLES[s].color; c.font = font(34, 800, MONO);
-      c.textAlign = 'right'; c.fillText(`×${R.counts[s]}`, W - P - 10, ly); c.textAlign = 'left';
-      c.fillStyle = T.sub; c.font = font(21, 500); c.fillText(STYLES[s].desc, lx + 34, ly + 32);
-    });
-    y += 360;
+    // 领卡券
+    const th = 176, tx = P - 10, tw = W - 2 * P + 20;
+    c.save();
+    c.beginPath(); rr(c, tx, y, tw, th, 26);
+    c.fillStyle = hexA(T.pc, 0.12); c.fill();
+    c.setLineDash([12, 10]); c.strokeStyle = T.pc; c.lineWidth = 3; c.stroke();
+    c.restore();
+    // 两侧打孔
+    c.fillStyle = '#0b0c25';
+    for (const x of [tx, tx + tw]) { c.beginPath(); c.arc(x, y + th / 2, 22, 0, 7); c.fill(); }
+    c.fillStyle = T.pc; c.font = font(24, 700, MONO);
+    spaced(c, 'REDEEM · 1024', P + 30, y + 54, 4);
+    c.fillStyle = T.ink; c.font = font(36, 800);
+    c.fillText(REDEEM.title, P + 30, y + 106);
+    c.fillStyle = T.sub; c.font = font(27, 500);
+    c.fillText(`「${sp.name}」实体小卡 · ${REDEEM.sub}`, P + 30, y + 148);
+    y += th + 70;
 
     // 卡底：10 盏灯 → 第 11 位
     c.strokeStyle = T.line; c.lineWidth = 2; c.beginPath(); c.moveTo(P, y); c.lineTo(W - P, y); c.stroke();
     y += 58;
-    let ex = lightsRow(c, T, P, y - 10, 11, 9);
+    const ex = lightsRow(c, P, y - 10, 11, 9);
     c.fillStyle = T.sub; c.font = font(30, 700, MONO); c.fillText('→', ex + 14, y);
-    led(c, ex + 70, y - 10, 13, T.rare ? T.ink : '#ffc766', true, !T.rare);
+    led(c, ex + 70, y - 10, 13, '#ffc766', true);
     c.textAlign = 'right';
-    c.fillStyle = T.rare ? T.ink : '#ffd98a'; c.font = font(30, 800, MONO);
+    c.fillStyle = '#ffd98a'; c.font = font(30, 800, MONO);
     c.fillText('v1023 → v1024', W - P, y - 4);
     c.fillStyle = T.sub; c.font = font(23, 500);
     c.fillText('1677 万种走法之一', W - P, y + 34);
-    c.textAlign = 'center';
-    y += 112;
-    c.fillStyle = T.ink; c.font = font(34, 800);
-    c.fillText('1677 万种走法，没有一种是错的。', W / 2, y);
     c.textAlign = 'left';
-    y += 80;
+    y += 96;
 
     return compose(L, y, T, glowY);
   }
@@ -323,38 +303,47 @@ const Card = (() => {
     c.fillText(`${name} · 陪纽扣从一个念头走到 v1024`, P, y + 56);
     y += 120;
 
-    const foot = 300;
-    const rowH = Math.max(88, Math.min(118, (H - y - foot - 2 * 64) / 12));
-    QUESTIONS.forEach((q, i) => {
+    const foot = 280, partH = 64, textW = W - 2 * P - 40;
+    const avail = H - y - foot - 2 * partH;
+    // 正面多高，背面就多高：放得下就印完整的选项原文，放不下退回卡面短句
+    c.font = font(29, 500);
+    let items = QUESTIONS.map((q, i) => { const o = q.o[R.answers[i]]; return { q, o, wl: wrap(c, o.t, textW) }; });
+    let lh = 42, need = items.reduce((s, it) => s + 62 + it.wl.length * lh, 0);
+    if (need > avail) {
+      c.font = font(31, 500);
+      items = items.map(it => ({ ...it, wl: [wrap(c, it.o.c, textW)[0]] }));
+      lh = 44; need = items.reduce((s, it) => s + 62 + lh, 0);
+    }
+    const extra = Math.max(0, Math.min(40, (avail - need) / 12));
+    items.forEach(({ q, o, wl }, i) => {
       if (i === 0 || i === 6) {
         c.fillStyle = T.faint; c.font = font(22, 700, MONO);
         spaced(c, i === 0 ? 'PART 1 · 一个人怎么把难事做成' : 'PART 2 · 一群人怎么把难事做成', P, y + 40, 2);
-        y += 64;
+        y += partH;
       }
-      const o = q.o[R.answers[i]];
-      const col = STYLES[o.s].color;
-      led(c, P + 10, y + rowH / 2 - 4, 9, col, true, !T.rare);
-      if (T.rare) { c.strokeStyle = hexA(T.ink, 0.6); c.lineWidth = 2; c.beginPath(); c.arc(P + 10, y + rowH / 2 - 4, 9, 0, 7); c.stroke(); }
+      const sp = SPIRITS[o.s], rowH = 62 + wl.length * lh + extra, top = y + extra / 2 + 30;
+      led(c, P + 10, top - 8, 9, sp.color, true);
       c.fillStyle = T.faint; c.font = font(22, 700, MONO);
-      c.fillText(`${String(i + 1).padStart(2, '0')}  ${q.v == null ? 'v—' : 'v' + q.v}`, P + 40, y + rowH / 2 - 18);
-      c.fillStyle = T.sub; c.font = font(22, 600); c.fillText(q.stage, P + 196, y + rowH / 2 - 18);
-      c.fillStyle = T.ink; c.font = font(31, 500);
-      const ln = wrap(c, o.c, W - 2 * P - 40)[0];
-      c.fillText(ln, P + 40, y + rowH / 2 + 24);
+      c.fillText(`${String(i + 1).padStart(2, '0')}  ${q.v == null ? 'v—' : 'v' + q.v}`, P + 40, top);
+      c.fillStyle = T.sub; c.font = font(22, 600); c.fillText(q.stage, P + 196, top);
+      c.fillStyle = sp.color; c.font = font(22, 700); c.textAlign = 'right';
+      c.fillText(sp.name, W - P, top); c.textAlign = 'left';
+      c.fillStyle = T.ink; c.font = font(lh === 42 ? 29 : 31, 500);
+      wl.forEach((ln, j) => c.fillText(ln, P + 40, top + 44 + j * lh));
       c.strokeStyle = T.line; c.lineWidth = 1.5;
       c.beginPath(); c.moveTo(P + 40, y + rowH - 1); c.lineTo(W - P, y + rowH - 1); c.stroke();
       y += rowH;
     });
 
-    // 底部：12 → 6 → 2 → 1
-    let fy = H - foot + 40;
+    // 底部：12 → 6 → 1
+    const fy = H - foot + 40;
     c.textAlign = 'center';
     c.fillStyle = T.sub; c.font = font(26, 700, MONO);
-    spaced(c, '12 → 6 → 2 → 1', W / 2, fy, 6, 'center');
+    spaced(c, '12 步 → 6 种精神 → 1 张卡', W / 2, fy, 4, 'center');
     c.fillStyle = T.ink; c.font = font(40, 800);
-    c.fillText('从个体的智慧，到群体的智慧结晶', W / 2, fy + 66);
+    c.fillText('差的那 1，是一路上帮过你的人', W / 2, fy + 70);
     c.fillStyle = T.sub; c.font = font(26, 500);
-    c.fillText('从 v1023 到 v1024，差的那 1，是一路上帮过你的人', W / 2, fy + 120);
+    c.fillText('从 v1023 到 v1024', W / 2, fy + 120);
     c.textAlign = 'left';
     return compose(L, H, T, null);
   }
@@ -378,5 +367,5 @@ const Card = (() => {
     return { front: f, back: b, frontUrl: exportImg(f), backUrl: exportImg(b) };
   }
 
-  return { render, hexA, preload: R => SHOW_MASCOT ? loadImg(`img/${IDENTITIES[R.p + R.s].img}.svg`) : Promise.resolve() };
+  return { render, hexA };
 })();

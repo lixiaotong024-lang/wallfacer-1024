@@ -1,7 +1,7 @@
-// 流程：首页 → 12 题（穿插过场和加载失败彩蛋）→ 结局 → 揭晓 → 掷骰子（同分时）→ 结果卡。进度存在 localStorage。
+// 流程：首页 → 12 题（穿插过场和加载失败彩蛋）→ 结局 → 揭晓 → 掷骰子（同分时）→ 面壁精神卡。进度存在 localStorage。
 
 (() => {
-  const KEY = 'wallfacer1024_v1';
+  const KEY = 'wallfacer1024_v2';
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const app = $('#app'), hud = $('#hud'), lightsEl = $('#lights'), verEl = $('#ver');
@@ -14,8 +14,8 @@
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const raf2 = fn => requestAnimationFrame(() => requestAnimationFrame(fn));
   const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  const color = s => STYLES[s].color;
-  const styleOf = qi => QUESTIONS[qi].o[S.answers[qi]].s;
+  const color = s => SPIRITS[s].color;
+  const spiritOf = qi => QUESTIONS[qi].o[S.answers[qi]].s;
 
   // 每道题一步，过场插在对应题目后面
   const FLOW = [];
@@ -121,7 +121,7 @@
     if (f.t === 'ending') return screenEnding();
     if (!S.result) { S.result = computeResult(); save(); }
     if (f.t === 'reveal') return screenReveal();
-    if (f.t === 'dice') return S.result.rolls.length ? screenDice() : go(S.step + 1);
+    if (f.t === 'dice') return S.result.cands.length > 1 ? screenDice() : go(S.step + 1);
     return screenResult();
   }
 
@@ -132,28 +132,14 @@
 
   // ---------- 计分（进揭晓页时只算一次，存下来） ----------
   function computeResult() {
-    const counts = { xc: 0, sj: 0, yl: 0, jf: 0 };
+    const counts = Object.fromEntries(ORDER.map(k => [k, 0]));
     S.answers.forEach((oi, i) => counts[QUESTIONS[i].o[oi].s]++);
-    const rolls = [];
-    const top = (pool, kind) => {
-      const max = Math.max(...pool.map(s => counts[s]));
-      const cands = pool.filter(s => counts[s] === max);
-      const pick = cands[(Math.random() * cands.length) | 0];
-      if (cands.length > 1) rolls.push({ kind, cands, pick });
-      return pick;
-    };
-    const p = top(RING, 'p');
-    const s = top(RING.filter(x => x !== p), 's');
-    // 每个关键词 2 道题：优先带梗的那句；都带梗或都不带，取后一道
-    const lines = {};
-    for (const g of SPIRIT) {
-      for (const k of [g, ...g.children]) {
-        const [a, b] = k.qs.map(qi => ({ qi, o: QUESTIONS[qi].o[S.answers[qi]] }));
-        const pick = a.o.h && !b.o.h ? a : b;
-        lines[k.key] = { c: pick.o.c, s: pick.o.s, q: pick.qi };
-      }
-    }
-    return { counts, p, s, rare: counts[p] >= RARE_MIN, rolls, lines, answers: S.answers.slice() };
+    const max = Math.max(...ORDER.map(k => counts[k]));
+    const cands = ORDER.filter(k => counts[k] === max);
+    const top = cands[(Math.random() * cands.length) | 0];
+    // 卡面编号：12 个选项序号拼成 24 位，正好 6 位十六进制，1677 万种走法各有一个
+    const code = S.answers.reduce((n, oi) => n * 4 + oi, 0).toString(16).toUpperCase().padStart(6, '0');
+    return { counts, top, cands, code, answers: S.answers.slice() };
   }
 
   // ---------- 首页 ----------
@@ -163,16 +149,12 @@
       <div class="bits">0b<span>1</span>0000000000 = 1024</div>
       ${SHOW_MASCOT ? '<div class="hero"><div class="orbit"></div><div class="orbit o2"></div><img src="img/00_hero.svg" alt="小钢炮"></div>' : ORB}
       <h1 class="grad">纽扣</h1>
-      <div class="intro">
-        <p>2046 年，新面壁计划启动。这一次不选 4 个人，选 <em>1024</em> 个。</p>
-        <p>接下来，你要陪一件“所有人都说做不成”的事，从一个念头走到发布。</p>
-        <p>12 道题，每道 4 种做法。没有错误答案，每一种都是面壁者的做法。</p>
-      </div>
+      <div class="intro"><p>陪一件“做不成”的事，从念头走到发布。</p></div>
       <form class="form" id="f" autocomplete="off">
         <div class="field"><label for="nm">花名 / 昵称</label><input id="nm" maxlength="12" placeholder="会印在你的卡上" enterkeyhint="go"></div>
         <button class="btn" id="start" disabled>启动面壁计划 <span class="arr">→</span></button>
       </form>
-      <div class="meta-line">12 道题 · 约 5 分钟 · <span class="mono">4¹² = 16,777,216</span> 种走法</div>
+      <div class="meta-line">12 道题 · 约 5 分钟 · 测出你的面壁精神</div>
     </div>`, { hudM: 'mini', bare: true });
     if (!m) return;
     const nm = $('#nm'), btn = $('#start');
@@ -388,31 +370,30 @@
     hint.style.visibility = 'hidden';
   }
 
-  // ---------- 揭晓：12 → 6 → 2 → 1 ----------
+  // ---------- 揭晓：12 → 6 → 1 ----------
+  const nameHtml = k => `<b style="color:${color(k)}">${SPIRITS[k].name}</b>`;
+  const twoLine = n => `${n.slice(0, 2)}<br>${n.slice(2)}`;
   async function screenReveal() {
     const R = S.result;
-    Card.preload(R).catch(() => {});
-    const kw = [SPIRIT[0], SPIRIT[1], SPIRIT[0].children[0], SPIRIT[1].children[0], SPIRIT[0].children[1], SPIRIT[1].children[1]];
-    const tri = [1, 3, 7, 15, 31, 63, 127, 255, 511, 1023, 1024];
+    const tie = R.cands.length > 1;
+    const max = R.counts[R.cands[0]];
     const m = await mount(`<div class="reveal">
-      <div class="tag" style="margin-bottom:22px">REVIEW · <i>12 → 6 → 2 → 1</i></div>
+      <div class="tag" style="margin-bottom:22px">REVIEW · <i>12 → 6 → 1</i></div>
       <div class="rv"><div class="num grad">12</div>
-        <h3>你的 <b>12</b> 个选择，走过了学习圈上的这几站。</h3>
-        <div class="dots12">${S.answers.map((_, i) => { const c = color(styleOf(i)); return `<i class="dot12" style="background:${c};box-shadow:0 0 10px ${c};transition-delay:${(i * 0.07).toFixed(2)}s">${i + 1}</i>`; }).join('')}</div>
-        <div class="legend">${RING.map(s => `<span style="--c:${color(s)}">${STYLES[s].full} ×${R.counts[s]}</span>`).join('')}</div></div>
+        <h3>你的 <b>12</b> 个选择，每一个都亮起了一种面壁精神。</h3>
+        <div class="dots12">${S.answers.map((_, i) => { const c = color(spiritOf(i)); return `<i class="dot12" style="background:${c};box-shadow:0 0 10px ${c};transition-delay:${(i * 0.07).toFixed(2)}s">${i + 1}</i>`; }).join('')}</div></div>
       <div class="rv"><div class="num grad">6</div>
-        <h3>它们是 <b>6</b> 个关键词</h3>
-        <div class="kw6">${kw.map(k => `<div class="kw"><span>${k.key}</span><span class="pair">${k.qs.map(qi => `<i style="--c:${color(styleOf(qi))}"></i>`).join('')}</span></div>`).join('')}</div></div>
-      <div class="rv"><div class="num grad">2</div>
-        <h3>收成 <b>2</b> 种精神</h3>
-        <div class="kw2"><div>深思实干<small>一个人怎么把难事做成</small></div><div>尽责无界<small>一群人怎么把难事做成</small></div></div></div>
+        <h3>收成 <b>6</b> 种精神，每种亮了几次</h3>
+        <div class="bars">${ORDER.map((k, j) => `<div class="bar${R.cands.includes(k) ? ' top' : ''}" style="--c:${color(k)}"><span class="n">${SPIRITS[k].name}</span><span class="cells">${Array.from({ length: 8 }, (_, x) => `<i class="${x < R.counts[k] ? 'on' : ''}" style="transition-delay:${(j * 0.12 + x * 0.05).toFixed(2)}s"></i>`).join('')}</span><span class="x${R.counts[k] ? '' : ' zero'}">×${R.counts[k]}</span></div>`).join('')}</div></div>
       <div class="rv"><div class="num grad">1</div>
-        <h3>收成 <b>1</b> 句话</h3>
-        <div class="one">从个体的智慧，<br><span class="grad">到群体的智慧结晶</span></div></div>
-      <div class="rv"><div class="tri">${tri.map(v => `<div class="l${v === 1024 ? ' gold' : ''}"><span class="v">v${v}</span><span class="eq">=</span><span class="b">${v.toString(2).padStart(11, ' ')}</span></div>${
-        v === 1023 ? '<div class="note">↑ 一个人全都要，能走到这里</div>' : v === 1024 ? '<div class="note gold">↑ 最后那个 1，是一路上帮过你的人</div>' : ''}`).join('')}</div></div>
-      <div class="rv"><p class="one" style="font-size:20px;text-align:center;margin:0 0 22px">10 盏灯没有灭，<br>是一起进到了更高的一位。</p>
-        <button class="btn" id="toCard">领取我的未来人格卡 <span class="arr">→</span></button></div>
+        ${tie
+          ? `<h3>亮得最多的有 <b>${R.cands.length}</b> 种，各 ${max} 次</h3>
+             <div class="one tie">${R.cands.map(nameHtml).join('<span> · </span>')}</div>
+             <p class="sp-def">都是你。但卡只能领一张，掷个骰子吧。</p>`
+          : `<h3>亮得最多的那 <b>1</b> 种</h3>
+             <div class="sp-name" style="--c:${color(R.top)}">${SPIRITS[R.top].name}</div>
+             <p class="sp-def">${SPIRITS[R.top].def}</p>`}
+        <button class="btn" id="toCard">${tie ? '🎲 掷骰子定一张' : '领取我的面壁精神卡'} <span class="arr">→</span></button></div>
     </div>`, { hudM: 'mini', bare: true });
     if (!m) return;
     const { el, t } = m;
@@ -427,22 +408,12 @@
       if (r.bottom > innerHeight - 24) scrollTo({ top: scrollY + r.bottom - innerHeight + 72, behavior: speed > 10 ? 'auto' : 'smooth' });
     };
     const blocks = $$('.rv', el);
-    const pause = [1900, 1800, 1500, 1500, 1200, 0];
+    const pause = [1900, 2200, 0];
     if (!await wait(t, 500)) return;
     for (let k = 0; k < blocks.length; k++) {
       blocks[k].classList.add('in');
       follow(blocks[k]);
-      SFX.line();
-      if (k === 4) {
-        const rows = $$('.l, .note', blocks[k]);
-        for (let j = 0, n = 0; j < rows.length; j++) {
-          const r = rows[j];
-          if (!await wait(t, r.classList.contains('note') ? 500 : r.classList.contains('gold') ? 900 : 170)) return;
-          r.classList.add('in');
-          if (r.classList.contains('gold')) SFX.carry();
-          else if (r.classList.contains('l')) SFX.off(9 - n++);
-        }
-      }
+      if (k === 2) { SFX.carry(); if (!tie) FX.burst([color(R.top), '#ffffff', color(R.top)], 60); } else SFX.line();
       if (!await wait(t, pause[k])) return;
     }
     skip.remove();
@@ -453,43 +424,31 @@
     const R = S.result;
     const m = await mount(`<div class="center dice">
       ${SHOW_MASCOT ? '<div class="hero"><img src="img/00_hero.svg" alt=""></div>' : ''}
-      <p id="dq"></p><p class="sub">${SHOW_MASCOT ? '小钢炮替你' : '那就'}掷一次骰子，结果会记下来。</p>
-      <div class="die-wrap"><div class="die" id="die" style="transform:rotateX(-22deg) rotateY(-32deg)">${[1, 2, 3, 4, 5, 6].map(n => `<div class="f f${n}"></div>`).join('')}</div></div>
+      <p>打平了：${R.cands.map(nameHtml).join(' · ')}，各 ${R.counts[R.cands[0]]} 次</p><p class="sub">${SHOW_MASCOT ? '小钢炮替你' : '那就'}掷一次骰子，结果会记下来。</p>
+      <div class="die-wrap"><div class="die" id="die" style="transform:rotateX(-22deg) rotateY(-32deg)">${[0, 1, 2, 3, 4, 5].map(j => { const k = R.cands[j % R.cands.length]; return `<div class="f f${j + 1}" style="--c:${color(k)}">${twoLine(SPIRITS[k].name)}</div>`; }).join('')}</div></div>
       <div class="die-res" id="dres"></div>
       <button class="btn" id="roll" style="max-width:320px;margin:14px auto 0">🎲 掷！</button>
     </div>`, { hudM: 'mini', bare: true });
     if (!m) return;
     const { t } = m;
-    const die = $('#die'), faces = $$('.f', die), q = $('#dq'), res = $('#dres'), btn = $('#roll');
+    const die = $('#die'), res = $('#dres'), btn = $('#roll');
     const ROT = [[0, 0], [0, -180], [0, -90], [0, 90], [-90, 0], [90, 0]];
-    const label = r => r.kind === 'p' ? '主场' : '副场';
-    let ri = 0, turns = 0, busy = false;
-    const setup = () => {
-      const r = R.rolls[ri];
-      q.innerHTML = `${label(r)}打平了：${r.cands.map(s => `<b style="color:${color(s)}">${STYLES[s].full}</b>`).join(' · ')}，各 ${R.counts[r.cands[0]]} 次`;
-      faces.forEach((f, j) => { const s = r.cands[j % r.cands.length]; f.textContent = STYLES[s].name; f.style.setProperty('--c', color(s)); });
-      res.classList.remove('in');
-      btn.innerHTML = ri ? '🎲 再掷一次，定副场' : '🎲 掷！';
-    };
-    setup();
+    let rolled = false, busy = false;
     btn.onclick = async () => {
       if (busy) return;
-      if (ri >= R.rolls.length) { SFX.tap(); return adv(t); }
+      if (rolled) { SFX.tap(); return adv(t); }
       busy = true;
-      const r = R.rolls[ri];
-      const hits = [0, 1, 2, 3, 4, 5].filter(j => r.cands[j % r.cands.length] === r.pick);
+      const hits = [0, 1, 2, 3, 4, 5].filter(j => R.cands[j % R.cands.length] === R.top);
       const fi = hits[(Math.random() * hits.length) | 0];
-      turns += 2;
-      die.style.transform = `rotateX(${ROT[fi][0] + 360 * turns}deg) rotateY(${ROT[fi][1] + 360 * (turns + 1)}deg)`;
+      die.style.transform = `rotateX(${ROT[fi][0] + 720}deg) rotateY(${ROT[fi][1] + 1080}deg)`;
       SFX.roll();
       if (!await wait(t, 1900)) return;
-      res.innerHTML = `${label(r)}：<span style="color:${color(r.pick)}">${STYLES[r.pick].full}</span>`;
+      res.innerHTML = `你的卡：<span style="color:${color(R.top)}">${SPIRITS[R.top].name}</span>`;
       res.classList.add('in');
       SFX.ok();
-      ri++;
       if (!await wait(t, 1100)) return;
-      if (ri < R.rolls.length) setup();
-      else btn.innerHTML = '看我的卡 <span class="arr">→</span>';
+      rolled = true;
+      btn.innerHTML = '看我的卡 <span class="arr">→</span>';
       busy = false;
     };
   }
@@ -516,14 +475,15 @@
   }
 
   async function screenResult() {
-    const R = S.result, id = IDENTITIES[R.p + R.s];
-    const pc = color(R.p), sc = color(R.s);
+    const R = S.result, sp = SPIRITS[R.top];
+    const pc = sp.color;
     const m = await mount(`<div class="result">
-      <div class="r-title">${R.rare ? '<span class="rare">RARE · 单站满格</span>' : ''}<div class="tag">2¹⁰ · 你的未来人格卡</div></div>
+      <div class="r-title"><div class="tag">2¹⁰ · 你的面壁精神卡</div></div>
       <div class="stage"><div class="spot"></div>
         <div class="flip" id="flip"><div class="flip-in"><div class="loading-card">GENERATING…</div></div></div>
         <div class="floor"></div></div>
       <div class="after" id="after">
+        <div class="redeem" style="--c:${pc}"><b>${REDEEM.title}</b><span>${REDEEM.sub}</span></div>
         <p class="r-tip">点卡片翻面，正反两面都能保存</p>
         <div class="actions">
           <button class="btn" id="save">保存这一面</button>
@@ -544,14 +504,13 @@
     }
     if (t !== tok) return;
     inner.innerHTML = '';
-    const faces = [[card.frontUrl, card.front, 'f', `${S.name} 的未来人格卡：${id.name}`], [card.backUrl, card.back, 'b', '卡片背面：我的 12 步']].map(([url, cv, cls, alt]) => {
+    const faces = [[card.frontUrl, card.front, 'f', `${S.name} 的面壁精神卡：${sp.name}`], [card.backUrl, card.back, 'b', '卡片背面：我的 12 步']].map(([url, cv, cls, alt]) => {
       const n = url ? Object.assign(new Image(), { src: url, alt }) : cv;
       n.className = 'face ' + cls;
       n.style.setProperty('--glow', Card.hexA(pc, 0.45));
       inner.appendChild(n);
       return n;
     });
-    if (R.rare) inner.insertAdjacentHTML('beforeend', '<div class="holo"></div>');
     if (faces[0].decode) await faces[0].decode().catch(() => {});
     if (t !== tok) return;
 
@@ -559,7 +518,7 @@
     SFX.card();
     if (!await wait(t, 800)) return;
     stage.classList.add('lit');
-    FX.burst([pc, sc, '#ffffff', pc, sc], 140);
+    FX.burst([pc, '#ffffff', pc, '#ffd98a'], 140);
     if (!await wait(t, 500)) return;
     $('#after').classList.add('in');
 
@@ -574,7 +533,7 @@
     $('#flipb').onclick = doFlip;
 
     const files = {};
-    const fname = b => `纽扣_${S.name}_${id.name}${b ? '_背面' : ''}.jpg`.replace(/[\\/:*?"<>|\s]/g, '');
+    const fname = b => `纽扣_${S.name}_${sp.name}${b ? '_背面' : ''}.jpg`.replace(/[\\/:*?"<>|\s]/g, '');
     $('#save').onclick = () => {
       const url = back ? card.backUrl : card.frontUrl;
       if (!url) return say('这个浏览器不支持导出，直接截图就好');
@@ -587,13 +546,13 @@
       }
       const file = files[back] || (files[back] = toFile(url, fname(back)));
       const canShare = !isWx && file && navigator.canShare && navigator.canShare({ files: [file] });
-      dialog(`<img src="${url}" alt="未来人格卡"><p style="margin:2px 0 14px;font-size:15px">长按图片，保存到相册</p>`,
+      dialog(`<img src="${url}" alt="面壁精神卡"><p style="margin:2px 0 14px;font-size:15px">长按图片，保存到相册</p>`,
         canShare ? [{ t: '关闭', ghost: true }, { t: '系统分享', fn: () => navigator.share({ files: [file] }).catch(() => {}) }] : [{ t: '好的', ghost: true }], true);
     };
     $('#share').onclick = () => {
       SFX.tap();
       const url = location.href.split(/[?#]/)[0];
-      const text = `我陪纽扣走到了 v1024，测出来是「${id.name}」，主场${STYLES[R.p].full}。你从哪一站出发？`;
+      const text = `我陪纽扣走到了 v1024，测出来我的面壁精神是「${sp.name}」。你是哪一种？`;
       if (isWx) return dialog('<div class="em">↗️</div><p>点右上角 <b>···</b><br>发送给同事，或分享到朋友圈</p>', [{ t: '知道了', ghost: true }], true);
       if (isMobile && navigator.share) return navigator.share({ title: document.title, text, url }).catch(() => {});
       copy(`${text} ${url}`).then(ok => say(ok ? '链接已复制，发给同事吧' : url));
@@ -606,13 +565,13 @@
     };
   }
 
-  // 调试：__wf.auto('xc xc sj xc xc yl sj xc sj jf yl sj', 'result')
+  // 调试：__wf.auto('tz ss jz zy kf yz tz ss jz zy kf yz', 'result')
   window.__wf = {
     get S() { return S; }, FLOW, go,
     auto(styles, to = 'reveal') {
       const arr = typeof styles === 'string' ? styles.trim().split(/\s+/) : styles || [];
       S.name = S.name || '测试员';
-      S.answers = QUESTIONS.map((q, i) => q.o.findIndex(o => o.s === (arr[i] || RING[(Math.random() * 4) | 0])));
+      S.answers = QUESTIONS.map((q, i) => { const j = q.o.findIndex(o => o.s === arr[i]); return j >= 0 ? j : (Math.random() * 4) | 0; });
       QUESTIONS.forEach((_, i) => { if (!S.orders[i]) S.orders[i] = shuffle([0, 1, 2, 3]); });
       S.eggDone = true;
       S.result = null;
